@@ -295,3 +295,96 @@ int Renombrar(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos, char *nombrea
    return 0;
    
 }
+
+int Copiar(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos, EXT_BYTE_MAPS *ext_bytemaps, EXT_SIMPLE_SUPERBLOCK *ext_superblock, EXT_DATOS *memdatos, char *nombreorigen, char *nombredestino, FILE *fich) {
+   
+   // Search for the source file in the directory
+   int s_file = BuscaFich(directorio, inodos, nombreorigen);
+   // Search for the destination file in the directory
+   int d_file = BuscaFich(directorio, inodos, nombredestino);
+
+   // If the source file does not exist, return an error
+   if (s_file == -1) {
+      printf("ERROR: Source file '%s' not found.\n", nombreorigen);
+     return -1;
+   }
+
+   
+   if (d_file != -1) {
+      printf("ERROR: A file with the name '%s' already exists.\n", nombredestino);
+      return -1;
+   }
+
+   // Find a free inode for the new file
+   int new_inode = -1;
+   for (int i = 0; i < MAX_INODOS; i++) {
+      if (ext_bytemaps->bmap_inodos[i] == 0) {
+         new_inode = i;
+         ext_bytemaps->bmap_inodos[i] = 1; // Mark the inode as used
+         ext_superblock->s_free_inodes_count--; // Decrement the free inode count
+         break;
+      }
+   }
+
+   // If no free inode is found, return an error
+   if (new_inode == -1) {
+      printf("No free inodes available.\n");
+      return -1;
+   }
+
+   // Find a free directory entry for the new file
+   int new_dir_idx = -1;
+   for (int i = 0; i < MAX_FICHEROS; i++) {
+      if (directorio[i].dir_inodo == NULL_INODO) {
+         new_dir_idx = i;
+         strcpy(directorio[i].dir_nfich, nombredestino); // Set the new file name
+         directorio[i].dir_inodo = new_inode; // Associate the new inode with the directory entry
+         break;
+      }
+   }
+
+   // If no free directory entry is found, return an error
+   if (new_dir_idx == -1) {
+      printf("No space available in the directory.\n");
+      return -1;
+   }
+
+   // Copy the inode metadata from the source file to the new file
+   EXT_SIMPLE_INODE *source_inode = &inodos->blq_inodos[directorio[s_file].dir_inodo];
+   EXT_SIMPLE_INODE *destination_inode = &inodos->blq_inodos[new_inode];
+   destination_inode->size_fichero = source_inode->size_fichero;
+
+   // Copy the blocks of data from the source file to the new file
+   for (int i = 0; i < MAX_NUMS_BLOQUE_INODO; i++) {
+      if (source_inode->i_nbloque[i] != NULL_BLOQUE) {
+         // Find a free block for the new file
+         int new_block_idx = -1;
+         for (int j = 0; j < MAX_BLOQUES_DATOS; j++) {
+            if (ext_bytemaps->bmap_bloques[j] == 0) {
+               new_block_idx = j;
+               ext_bytemaps->bmap_bloques[j] = 1; // Mark the block as used
+               ext_superblock->s_free_blocks_count--; // Decrement the free blocks count
+               break;
+            }
+         }
+
+          // If no free block is available, return an error
+         if (new_block_idx == -1) {
+            printf("ERROR: No free blocks available to copy file.\n");
+            return -1;
+         }
+
+         // Assign the new block to the destination inode
+         destination_inode->i_nbloque[i] = new_block_idx;
+          // Copy the content of the source block to the destination block
+         memcpy(memdatos[new_block_idx - PRIM_BLOQUE_DATOS].dato,memdatos[source_inode->i_nbloque[i] - PRIM_BLOQUE_DATOS].dato,SIZE_BLOQUE);
+      } else {
+      // If the source inode has no block at this position, set the destination block to NULL
+      destination_inode->i_nbloque[i] = NULL_BLOQUE;
+      }
+   }
+
+   printf("File '%s' copied to file '%s'.\n", nombreorigen, nombredestino);
+
+   return 0;
+}
