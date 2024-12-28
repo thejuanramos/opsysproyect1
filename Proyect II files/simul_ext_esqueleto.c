@@ -171,3 +171,127 @@ void Directorio(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos) {
       }
 }
 
+
+// Function to parse a command and extract its components
+int ComprobarComando(char *strcomando, char *orden, char *argumento1, char *argumento2){
+
+   char *token;
+   int num_tokens = 0;
+
+   // Initialize the output strings to empty
+   orden[0] = '\0';
+   argumento1[0] = '\0';
+   argumento2[0] = '\0';
+
+   // Remove the trailing newline character from the input command
+   strcomando[strcspn(strcomando, "\n")] = '\0';
+
+   // Tokenize the command using space as a delimiter
+   token = strtok(strcomando, " ");
+   while(token != NULL){
+
+      if(num_tokens == 0){
+         // First token is the command
+         strcpy(orden, token);
+      }else if(num_tokens == 1){
+         // Second token is the first argument
+         strcpy(argumento1, token);
+      }else if(num_tokens == 2){
+         // Third token is the second argument
+         strcpy(argumento2, token);
+      }else{
+         // Too many tokens, invalid command format
+         return 1;
+      }
+
+      num_tokens ++;
+      token = strtok(NULL, " ");
+   }
+
+   // Return error if no tokens were found
+   if(num_tokens == 0){
+      return 1;
+   }
+
+   return 0;
+
+}
+
+// Function to search for a file by name in the directory
+int BuscaFich(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos, char *nombre){
+
+   // Iterate through the directory entries
+   for (int i = 0; i < MAX_FICHEROS; i++){
+      if (directorio[i].dir_inodo != NULL_INODO && strcmp(directorio[i].dir_nfich, nombre) == 0){
+         // Return the index of the matching entry
+         return i;
+      }
+   }
+
+   // File not found
+   return -1;
+}
+
+// Function to write the inodes and directory to the file system
+void Grabarinodosydirectorio(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos, FILE *fich){
+
+   // Write the inodes to their specific position in the file
+   fseek(fich, 2 * SIZE_BLOQUE, SEEK_SET);
+   fwrite(inodos, sizeof(EXT_BLQ_INODOS), 1, fich);
+
+   // Write the directory entries to their specific position in the file
+   fseek(fich, 3 * SIZE_BLOQUE, SEEK_SET);
+   fwrite(directorio, sizeof(EXT_ENTRADA_DIR), 1, fich);
+
+}
+
+// Function to write the bytemaps to the file system
+void GrabarByteMaps(EXT_BYTE_MAPS *ext_bytemaps, FILE *fich){
+
+   fseek(fich, 1 * SIZE_BLOQUE, SEEK_SET);
+   fwrite(ext_bytemaps, sizeof(EXT_BYTE_MAPS), 1, fich);
+
+}
+
+// Function to write the superblock to the file system
+void GrabarSuperBloque(EXT_SIMPLE_SUPERBLOCK *ext_superblock, FILE *fich){
+
+   fseek(fich, 0 * SIZE_BLOQUE, SEEK_SET);
+   fwrite(ext_superblock, sizeof(EXT_SIMPLE_SUPERBLOCK), 1, fich);
+
+}
+
+// Function to write the data blocks to the file system
+void GrabarDatos(EXT_DATOS *memdatos, FILE *fich){
+
+   fseek(fich, 4 * SIZE_BLOQUE, SEEK_SET);
+   fwrite(memdatos, sizeof(EXT_DATOS), 1, fich);
+
+}
+
+int Renombrar(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos, char *nombreantiguo, char *nombrenuevo){
+    
+   // Search for the file with the old name in the directory
+   int file = BuscaFich(directorio, inodos, nombreantiguo);
+   // Check if a file with the new name already exists
+   int new_name = BuscaFich(directorio, inodos, nombrenuevo);
+
+   // If the file with the old name does not exist, return an error
+   if(file == -1){
+      printf("ERROR: file '%s' not found.\n", nombreantiguo);
+      return -1;
+   }
+
+   // If a file with the new name already exists, return an error
+   if(new_name != -1){
+      printf("ERROR: A file with the name '%s' already exist.\n", nombrenuevo);
+      return -1;
+   }
+
+   // Rename the file by copying the new name into the directory entry
+   strcpy(directorio[file].dir_nfich, nombrenuevo);
+   printf("file %s renamed to %s.\n", nombreantiguo, nombrenuevo);
+
+   return 0;
+   
+}
