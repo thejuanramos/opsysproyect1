@@ -388,3 +388,56 @@ int Copiar(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos, EXT_BYTE_MAPS *e
 
    return 0;
 }
+
+
+int Imprimir(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos, EXT_DATOS *memdatos, char *nombre){
+
+   int file = BuscaFich(directorio, inodos, nombre);
+
+   // Check if the file exists in the directory
+   if(file == -1){
+      printf("ERROR: file '%s' not found.\n", nombre);
+      return -1;
+   }
+
+   // Get the inode associated with the file
+   int inodo_file = directorio[file].dir_inodo;
+   EXT_SIMPLE_INODE *inode = &inodos->blq_inodos[inodo_file];
+
+   // Iterate through the blocks assigned to the inode and print their contents
+   for(int i = 0; i < MAX_NUMS_BLOQUE_INODO; i++){
+      if(inode->i_nbloque[i] != NULL_BLOQUE){
+         printf("%s", memdatos[inode->i_nbloque[i] - PRIM_BLOQUE_DATOS].dato);
+      }
+   }
+
+   // Ensure a newline is printed after the file content
+   printf("\n");
+
+   return 0;
+
+}
+
+int Borrar(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos, EXT_BYTE_MAPS *ext_bytemaps, EXT_SIMPLE_SUPERBLOCK *ext_superblock, char *nombre,  FILE *fich){
+
+   int file = BuscaFich(directorio, inodos, nombre);
+
+   // Check if the file exists in the directory
+   if(file == -1){
+      printf("ERROR: file '%s' not found.\n", nombre);
+      return -1;
+   }
+
+   // Get the inode associated with the file
+   int inodo_file = directorio[file].dir_inodo;
+   EXT_SIMPLE_INODE *inode = &inodos->blq_inodos[inodo_file];
+
+   // Free all blocks associated with the file
+   for(int i = 0; i < MAX_NUMS_BLOQUE_INODO; i++){
+      if(inode->i_nbloque[i] != NULL_BLOQUE){
+         ext_bytemaps->bmap_bloques[inode->i_nbloque[i]] = 0; // Mark the block as free in the block bytemap
+         ext_superblock->s_free_blocks_count ++; // Increment the free block count in the superblock
+         inode->i_nbloque[i] = NULL_BLOQUE; // Unlink the block from the inode
+      }
+   }
+
